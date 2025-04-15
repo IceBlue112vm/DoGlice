@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
 include(_.cmake)
 
-project(DGI)
+project(Doglice)
 
 ae2f_CoreLibFetch(ae2f Core main)
 
-file(GLOB_RECURSE src_DGI ${PROJECT_SOURCE_DIR}/src/DGI/*.c*)
-file(GLOB_RECURSE include_DGI ${PROJECT_SOURCE_DIR}/include/DGI/*)
+file(GLOB_RECURSE ${PROJECT_NAME}_src ${PROJECT_SOURCE_DIR}/src/${PROJECT_NAME}/*.c*)
+file(GLOB_RECURSE ${PROJECT_NAME}_inc ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}/*)
 
+add_library(i${PROJECT_NAME} INTERFACE ${include_DGI})
+target_link_libraries(Core INTERFACE ${${PROJECT_NAME}_inc})
+target_include_directories(i${PROJECT_NAME} INTERFACE include/${PROJECT_NAME})
 
-add_library(DGI_Interface INTERFACE ${include_DGI})
-target_link_libraries(Core INTERFACE ${include_DGI})
-
-add_executable(DGI ${src_DGI})
-target_link_libraries(DGI PRIVATE DGI_Interface)
-target_link_libraries(DGI PRIVATE vulkan)
+add_executable(${PROJECT_NAME} ${${PROJECT_NAME}_src})
+target_link_libraries(${PROJECT_NAME} PRIVATE i${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} PRIVATE vulkan)
