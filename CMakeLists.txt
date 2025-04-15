@@ -5,7 +5,7 @@ project(Doglice)
 
 ae2f_CoreLibFetch(ae2f Core main)
 
-file(GLOB_RECURSE ${PROJECT_NAME}_src ${PROJECT_SOURCE_DIR}/src/${PROJECT_NAME}/*.c*)
+file(GLOB_RECURSE ${PROJECT_NAME}_src ${PROJECT_SOURCE_DIR}/src/${PROJECT_NAME}/*)
 file(GLOB_RECURSE ${PROJECT_NAME}_inc ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}/*)
 
 add_library(i${PROJECT_NAME} INTERFACE ${include_DGI})
