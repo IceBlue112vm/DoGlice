@@ -5,6 +5,7 @@ project(Doglice)
 set(CMAKE_CXX_STANDARD 17)
 
 ae2f_CoreLibFetch(ae2f Core main)
+ae2f_CoreLibFetch(glfw glfw master)
 find_package(Vulkan REQUIRED)
 
 file(GLOB_RECURSE ${PROJECT_NAME}_src ${PROJECT_SOURCE_DIR}/src/${PROJECT_NAME}/*)
