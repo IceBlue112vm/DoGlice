@@ -22,3 +22,4 @@ target_include_directories(i${PROJECT_NAME}
 add_executable(${PROJECT_NAME} ${${PROJECT_NAME}_src})
 target_link_libraries(${PROJECT_NAME} PRIVATE i${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} PRIVATE Vulkan::Vulkan)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${glfw__glfw__FETCHED})
