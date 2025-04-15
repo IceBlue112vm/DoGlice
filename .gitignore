@@ -1,0 +1,4 @@
+.*/
+*.auto.h
+submod/*
+build/*
