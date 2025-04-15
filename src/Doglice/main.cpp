@@ -47,6 +47,8 @@ private:
 };
 
 int main() {
+    puts("HelloWorld");
+
     HelloTriangleApplication app;
 
     try {
