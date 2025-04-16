@@ -1,12 +1,14 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
-#include <vector>
+#include <cstdlib>   // 00_base_code
+#include <iostream>  // 00_base_code
+#include <stdexcept> // 00_base_code
+#include <cstring>   // 02_validation_layers
+#include <vector>    // 02_validation_layers
+#include <optional>  // 03_physical_device_selection
 
+// window size
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
@@ -36,23 +38,33 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
     }
 }
 
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+
+    bool isComplete() {
+        return graphicsFamily.has_value();
+    }
+};
+
 class DoGlIce {
 public:
     // init DoGlIce
-    void init() {
-        initWindow();
-        initVulkan();
+    bool init() {
+        if (!initWindow()) return false;
+        if (!initVulkan()) return false;
+
+        return true;
     }
 
-    // DoGlIce main
-    void run() {
+    int run() {
         mainLoop();
+
+        return 0;
     }
     
     ~DoGlIce() {
         cleanup();
     }
-
 
 private:
     // local variables
@@ -61,27 +73,52 @@ private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
 
+    // Select Physical Device
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
     // called by init()
-    void initWindow() {
-        glfwInit();
+    bool initWindow() {
+        if (!glfwInit()) {
+            std::cout << "glfwInit() failed." << '\n';
+            return false;
+        }
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         window = glfwCreateWindow(WIDTH, HEIGHT, "Doglice_v.0.0.1", nullptr, nullptr);
+        if (!window) {
+            std::cout << "glfwCreateWindow() failed." << '\n';
+            return false;
+        }
+
+        return true;
     }
 
     // called by init()
-    void initVulkan() {
-        createInstance();
-        setupDebugMessenger();
+    bool initVulkan() {
+        if (!createInstance()) {
+            std::cout << "createInstance() failed." << '\n';
+            return false;
+        };
+        if (!setupDebugMessenger()) {
+            std::cout << "setupDebugMessenger() failed." << '\n';
+            return false;
+        };
+        if (!pickPhysicalDevice()) {
+            std::cout << "pickPhysicalDevice() failed." << '\n';
+            return false;
+        };
+
+        return true;
     }
 
     // called by initVulkan()
-    void createInstance() {
+    bool createInstance() {
         // check Validation Layer
         if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
+            std::cout << "validation layers requested, but not available!" << '\n';
+            return false;
         }
 
         VkApplicationInfo appInfo{};                           // set struct 0
@@ -99,7 +136,7 @@ private:
         // extensions
         auto extensions = getRequiredExtensions();
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        createInfo.ppEnabledExtensionNames = extensions.data(); 
+        createInfo.ppEnabledExtensionNames = extensions.data();
 
         // Validation Layer
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
@@ -115,10 +152,13 @@ private:
             createInfo.pNext = nullptr;
         }
 
-        // real creation
+        // real creation;
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create instance!");
+            std::cout << "failed to create instance!" << '\n';
+            return false;
         }
+
+        return true;
     }
 
     // called by createInstance()
@@ -160,9 +200,27 @@ private:
         }
 
         return extensions;
-    } 
-    
-    // called by createInstance()
+    }
+
+
+    // called by initVulkan()
+    bool setupDebugMessenger() {
+        if (!enableValidationLayers) {
+            return true;
+        }
+
+        VkDebugUtilsMessengerCreateInfoEXT createInfo;
+        populateDebugMessengerCreateInfo(createInfo);
+
+        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+            std::cout << "failed to set up debug messenger!" << '\n';
+            return false;
+        }
+
+        return true;
+    }
+
+    // called by createInstance() and setupDebugMessenger()
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
         createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -177,17 +235,67 @@ private:
 
         return VK_FALSE;
     }
+
     
     // called by initVulkan()
-    void setupDebugMessenger() {
-        if (!enableValidationLayers) return;
+    bool pickPhysicalDevice() {
+        uint32_t deviceCount = 0;
+        vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
-        VkDebugUtilsMessengerCreateInfoEXT createInfo;
-        populateDebugMessengerCreateInfo(createInfo);
-
-        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
-            throw std::runtime_error("failed to set up debug messenger!");
+        if (deviceCount == 0) {
+            std::cout << "failed to find GPUs with Vulkan support!" << '\n';
+            return false;
         }
+
+        std::vector<VkPhysicalDevice> devices(deviceCount);
+        vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+        for (const auto& device : devices) {
+            if (isDeviceSuitable(device)) {
+                physicalDevice = device;
+                break;
+            }
+        }
+
+        if (physicalDevice == VK_NULL_HANDLE) {
+            std::cout << "failed to find a suitable GPU!" << '\n';
+            return false;
+        }
+
+        return true;
+    }
+
+    // called by pickPhysicalDevice()
+    bool isDeviceSuitable(VkPhysicalDevice device) {
+        QueueFamilyIndices indices = findQueueFamilies(device);
+
+        return indices.isComplete();
+    }
+
+    // called by isDeviceSuitable()
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indices;
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        int i = 0;
+        for (const auto& queueFamily : queueFamilies) {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphicsFamily = i;
+            }
+
+            if (indices.isComplete()) {
+                break;
+            }
+
+            i++;
+        }
+
+        return indices;
     }
 
 
@@ -213,24 +321,16 @@ private:
     }
 };
 
+
 int main() {
     DoGlIce app;
 
     // init application
-    try {
-        app.init();
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
+    if (!app.init()) {
+        std::cout << "Initialization failed." << '\n';
+        return -1;
     }
 
     // run application
-    try {
-        app.run();
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
+    return app.run();
 }
