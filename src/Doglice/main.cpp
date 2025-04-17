@@ -7,6 +7,7 @@
 #include <cstring>   // 02_validation_layers
 #include <vector>    // 02_validation_layers
 #include <optional>  // 03_physical_device_selection
+#include <set>       // 05_window_surface
 
 // window size
 const uint32_t WIDTH = 800;
@@ -39,12 +40,14 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> graphicsFamily; // for rendering instructions
+    std::optional<uint32_t> presentFamily; // for swap chain
 
     bool isComplete() {
-        return graphicsFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
+
 
 class DoGlIce {
 public:
@@ -73,8 +76,16 @@ private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
 
+    // Abstracts the OS window surface in a platform-independent way (used for swapchain creation).
+    VkSurfaceKHR surface; // KHR : Khronos extension
+
     // Select Physical Device
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDevice device; // logical device (physical device handler)
+
+    // Queue Family
+    VkQueue graphicsQueue; // for rendering instructions
+    VkQueue presentQueue;  // for swap chain
 
     // called by init()
     bool initWindow() {
@@ -105,8 +116,16 @@ private:
             std::cout << "setupDebugMessenger() failed." << '\n';
             return false;
         };
+        if (!createSurface()) {
+            std::cout << "createSurface() failed." << '\n';
+            return false;
+        }
         if (!pickPhysicalDevice()) {
             std::cout << "pickPhysicalDevice() failed." << '\n';
+            return false;
+        };
+        if (!createLogicalDevice()) {
+            std::cout << "createLogicalDevice() failed." << '\n';
             return false;
         };
 
@@ -127,7 +146,7 @@ private:
         appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 1); // app version
         appInfo.pEngineName = "DoGlIce Engine";                // our Engine name
         appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);      // engine version
-        appInfo.apiVersion = VK_API_VERSION_1_0;               // Vulkan api version TODO: have to choose api version
+        appInfo.apiVersion = VK_API_VERSION_1_0;               // Vulkan api version TODO: have to change api version
 
         VkInstanceCreateInfo createInfo{}; // set 0
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO; // set type as instance_info
@@ -288,6 +307,13 @@ private:
                 indices.graphicsFamily = i;
             }
 
+            VkBool32 presentSupport = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+            if (presentSupport) {
+                indices.presentFamily = i;
+            }
+
             if (indices.isComplete()) {
                 break;
             }
@@ -296,6 +322,68 @@ private:
         }
 
         return indices;
+    }
+
+
+    // called by initVulkan()
+    bool createLogicalDevice() {
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        std::set<uint32_t> uniqueQueueFamilies = {
+            indices.graphicsFamily.value(),
+            indices.presentFamily.value()
+        };
+
+        float queuePriority = 1.0f;
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
+
+        VkPhysicalDeviceFeatures deviceFeatures{};
+
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
+
+        createInfo.pEnabledFeatures = &deviceFeatures;
+
+        createInfo.enabledExtensionCount = 0;
+
+        if (enableValidationLayers) {
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+        } else {
+            createInfo.enabledLayerCount = 0;
+        }
+
+        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+            std::cout << "failed to create logical device!" << '\n';
+            return false;
+        }
+
+        vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+        vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+
+        return true;
+    }
+
+
+    // called by initVulkan()
+    bool createSurface() {
+        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+            std::cout << "failed to create window surface!" << '\n';
+            return false;
+        }
+        
+        return true;
     }
 
 
@@ -309,10 +397,13 @@ private:
 
     // called by DoGlIce Destructor
     void cleanup() {
+        vkDestroyDevice(device, nullptr); // destroy logical device
+
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
 
+        vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
 
         glfwDestroyWindow(window);
